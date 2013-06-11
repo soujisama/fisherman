@@ -45,8 +45,8 @@
     public $followingCount;
     public $followerList;
     public $followingList;
-	public $followerIndex = 0;
-	public $followingIndex = 0;
+	public $followerIndex = 100;
+	public $followingIndex = 100;
     public $status;
     
     function __construct($id,$n,$frC,$fgC,$frL,$fgL) {
@@ -260,25 +260,13 @@
 		
 	}
 	
-	function getDestinations() {
-		$sql = $this->db->prepare('select name, destination from comment_marker');
-		$sql->execute();
-		$sql->bind_result($name,$destination);
-		$prev = "";
-		$map = array();
-		$array = array();
-		while($sql->fetch()) {
-			if($prev == "") $prev = $name;
-			if($prev != $name) {
-				$map[$prev] = $array;
-				$prev = $name;
-				$array = array();
-			}
-			$array[] = $destination;
-		}
-		$sql->close();
-		$map[$prev] = $array;
-		sendJSONResponse(200,$map);
+	function getNextList() {
+		$list = array();
+		if($this->data->list == 0) $list = $this -> fetch('fisherman_follower_lists',$this->data->cursor);
+		else $list = $this -> fetch('fisherman_following_lists',$this->data->cursor);
+		$status = (object)array('type' => 'success', 'message' => 'list grabbed, dattebayo!');
+		$ret = (object) array('list' => $list, 'cursor' => $this->data->cursor + 100, 'status' => $status);
+		echo json_encode($ret);
 	}
 	
 	function uploadCM() {
@@ -369,6 +357,6 @@ $api = new FishermanAPI($postdata,$access_token);
 if($type == "registerUser") $api->registerUser();
 else if($type == "getOwnerInfo") $api->getOwnerInfo();
 else if($type == "getUserInfo") $api->getUserInfo();
-else if($type == "uploadR") $api->uploadR();
+else if($type == "getNextList") $api->getNextList();
 else if($type == "getDestinations") $api->getDestinations();
 ?>

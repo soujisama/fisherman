@@ -52,15 +52,21 @@ $access_token = $_SESSION['access_token'];
     <input type="hidden" id="mess" value="<?php echo $_GET['mess']; ?>" />
     <div class="container-fluid" style="height:100%">
         <section id="searchPane" data-bind="slideVisible: doingSearch, with: searchResult" class="container-fluid" style="height:90%; display:none;">
-            <div style="background: url('images/image.jpg') center right no-repeat; height: 15%">
+            <div style="background: url('') center right no-repeat; height: 10%">
                 <div style="background: rgba(255,255,255,0.7)">
-                    <h1 data-bind="text: handle"></h1>
-                    <p>
-                        is following <span data-bind="text: followingCount"></span> people and is being followed by <span data-bind="text: followerCount"></span> people.
-                    </p>
+                    <h5 style="text-transform:uppercase;">
+                    	<span data-bind="text: handle" style="color:#aba"></span> 
+                    	is following <span data-bind="text: followingCount"></span> people and is being followed by
+                        <span data-bind="text: followerCount"></span> people.
+                <span class="pull-right">
+                   	<button class="btn btn-mini btn-info">
+                	    ADD <span data-bind="text: $root.tempList().length"></span> TO FOLLOW QUEUE
+                    </button>
+                </span>
+                    </h5>
                 </div>
             </div>
-            <div class="row-fluid" style="height: 85%;">
+            <div class="row-fluid" style="height: 90%;">
                 <div class="span12" style="height: 100%;">
                     <div class="row-fluid" style="height: 100%;">
                         <div class="span6" style="height: 100%;">
@@ -74,10 +80,11 @@ $access_token = $_SESSION['access_token'];
                                 </li>
                             </ul-->
                             <div class="search-header">
-                                Followers
+                            	FOLLOWERS
                                 <div class="pull-right">
-                                    <button class="btn btn-info btn-mini">
-                                    	ADD <span data-bind="text: $root.tempList().length"></span> TO FOLLOW QUEUE
+                                	<button class="btn btn-inverse btn-mini" data-bind="click: $root.getNext.bind($data,'0')">NEXT 100</button>
+                                	<button class="btn btn-mini btn-info hide">
+                                      ADD <span data-bind="text: $root.tempList().length"></span> TO FOLLOW QUEUE
                                     </button>
                                 </div>
                             </div>
@@ -117,10 +124,11 @@ $access_token = $_SESSION['access_token'];
                                 </li>
                             </ul-->
                             <div class="search-header">
-                                Following
+                                Following 
                                 <div class="pull-right">
-                                    <button class="btn btn-info btn-mini">
-                                    	ADD <span data-bind="text: $root.selectedFollowingCount"></span> TO FOLLOW QUEUE
+                                	<button class="btn btn-inverse btn-mini" data-bind="click: $root.getNext.bind($data,'1')">NEXT 100</button>
+                                	<button class="btn btn-mini btn-info hide">
+                                      ADD <span data-bind="text: $root.tempList().length"></span> TO FOLLOW QUEUE
                                     </button>
                                 </div>
                             </div>

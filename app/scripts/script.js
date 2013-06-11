@@ -78,6 +78,7 @@ $(function () {
 						self.searchResult().followingList(data.followingList);
 						self.searchResult.valueHasMutated();*/
 						self.searchResult(data);
+						//ko.mapping.fromJS(data,{},self.searchResult());
 						ko.utils.arrayForEach(self.searchResult().followingList,function(listItem) {
 							self.tempList.remove(listItem.handle_id);
 							if(listItem.selected) self.tempList.push(listItem.handle_id);
@@ -88,7 +89,7 @@ $(function () {
 						});
 						//data = ko.utils.parseJSON(data);
 						//ko.mapping.fromJS(data,{},self.searchResult);//()
-						//self.makeAllObservables(self.searchResult);
+						self.makeAllObservables(self.searchResult);
 						//self.searchResult().followerList = ko.observable(self.searchResult().followerList);
 						//self.searchResult().followerList().selected = ko.observable(self.searchResult().followerList().selected);
 						//alert(ko.isObservable(self.searchResult().followerList));
@@ -143,6 +144,47 @@ $(function () {
         this.addToQueue = function() {
 
         };
+		
+		self.getNext = function(junk, isFollowingList) {
+			var cursor = 0;
+			if(isFollowingList) cursor = self.searchResult().followingIndex;
+			else index = self.searchResult().followerIndex;
+			$.ajax({
+            	url: 'service.php',
+            	data: { type: 'getNextList', cursor: cursor, list: isFollowingList },
+            	type: 'POST',
+            	success: function(data) {
+					self.status(data.status);
+					if(data.status.type != "error") {
+						if(isFollowingList) {
+							self.searchResult().following(data.list);
+							self.searchResult().followingIndex(data.cursor);
+							ko.utils.arrayForEach(self.searchResult().following,function(listItem) {
+								self.tempList.remove(listItem.handle_id);
+								if(listItem.selected) self.tempList.push(listItem.handle_id);
+							});
+						}
+						else {
+							self.searchResult.followers(data.list);
+							self.searchResult.followerIndex(data.cursor);
+							ko.utils.arrayForEach(self.searchResult().followers,function(listItem) {
+								self.tempList.remove(listItem.handle_id);
+								if(listItem.selected) self.tempList.push(listItem.handle_id);
+							});
+						}
+					}
+					else {					
+						alert(data.status.type + ": " + data.status.message);
+					}
+					self.status(data.status);
+					doneLoading();
+            	},
+            	error: function() {
+            		alert("sum win wong");
+            		doneLoading();
+            	}
+            });
+		};
 		
 		self.listChecked = function(listItem) {
 			self.tempList.remove(listItem.handle_id);
