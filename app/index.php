@@ -58,11 +58,11 @@ $access_token = $_SESSION['access_token'];
                     	<span data-bind="text: handle" style="color:#aba"></span> 
                     	is following <span data-bind="text: followingCount"></span> people and is being followed by
                         <span data-bind="text: followerCount"></span> people.
-                <span class="pull-right">
-                   	<button class="btn btn-mini btn-info">
-                	    ADD <span data-bind="text: $root.tempList().length"></span> TO FOLLOW QUEUE
-                    </button>
-                </span>
+                    <span class="pull-right">
+                        <button class="btn btn-mini btn-info" data-bind="click: $root.addToQueue">
+                            ADD <span data-bind="text: $root.tempList().length"></span> TO FOLLOW QUEUE
+                        </button>
+                    </span>
                     </h5>
                 </div>
             </div>
@@ -82,7 +82,7 @@ $access_token = $_SESSION['access_token'];
                             <div class="search-header">
                             	FOLLOWERS
                                 <div class="pull-right">
-                                	<button class="btn btn-inverse btn-mini" data-bind="click: $root.getNext.bind($data,'0')">NEXT 100</button>
+                                	<button class="btn btn-inverse btn-mini" data-bind="click: $root.getNext.bind(0,0)">NEXT 100</button>
                                 	<button class="btn btn-mini btn-info hide">
                                       ADD <span data-bind="text: $root.tempList().length"></span> TO FOLLOW QUEUE
                                     </button>
@@ -92,7 +92,7 @@ $access_token = $_SESSION['access_token'];
                                 <table class="table table-hover">
                                     <thead>
                                         <tr>
-                                            <th><input type="checkbox" class="checkbox" /></th>
+                                            <th><input type="checkbox" class="checkbox" data-bind="click: $root.checkAllBoxes.bind(0,0)" /></th>
                                             <th>handle</th>
                                             <th>followers</th>
                                             <th>following</th>
@@ -126,7 +126,7 @@ $access_token = $_SESSION['access_token'];
                             <div class="search-header">
                                 Following 
                                 <div class="pull-right">
-                                	<button class="btn btn-inverse btn-mini" data-bind="click: $root.getNext.bind($data,'1')">NEXT 100</button>
+                                	<button class="btn btn-inverse btn-mini" data-bind="click: $root.getNext.bind(1,1)">NEXT 100</button>
                                 	<button class="btn btn-mini btn-info hide">
                                       ADD <span data-bind="text: $root.tempList().length"></span> TO FOLLOW QUEUE
                                     </button>
@@ -136,7 +136,7 @@ $access_token = $_SESSION['access_token'];
                                 <table class="table table-hover">
                                     <thead>
                                         <tr>
-                                            <th><input type="checkbox" class="checkbox" /></th>
+                                            <th><input type="checkbox" class="checkbox" data-bind="click: $root.checkAllBoxes.bind(1,1)" /></th>
                                             <th>handle</th>
                                             <th>followers</th>
                                             <th>following</th>
@@ -182,7 +182,7 @@ $access_token = $_SESSION['access_token'];
                     <li class="hidden-phone"><a href='#'>followed by <span data-bind="text: fisherman().followerCount"></span></a></li>
                     <li class="disabled visible-wide"><a>... and these are your queues</a></li>
                     <li class="active"><a href='#' data-bind="click: getFollowQueue">follow queue <span class="badge badge-info" data-bind="    text: followQueue().length">0</span></a></li>
-                    <li class=""><a href='#'>inquiry queue <span class="badge badge-info" data-bind="text: inquiryQueue().length">0</span></a></li>
+                    <li class=""><a href='#'>inquiry queue <span class="badge badge-info" data-bind="text: inquireQueue().length">0</span></a></li>
                 </ul>
             </nav>
         </header>
@@ -191,7 +191,7 @@ $access_token = $_SESSION['access_token'];
             <div id="followQueue" class="span12">
                 <div class="span3">
                     <h5>Follow queue information</h5>
-                    <p>lol wuT!</p>
+                    <p data-bind="html: fisherman().information"></p>
                 </div>
                 <div class="span9">
                     <table class="table text-center table-hover">
@@ -210,8 +210,8 @@ $access_token = $_SESSION['access_token'];
                             <tr>
                                 <td><input type="checkbox" data-bind="checked: selected" class="checkbox" /></td>
                                 <td data-bind="text: handle"></td>
-                                <td data-bind="text: followers"></td>
-                                <td data-bind="text: following"></td>
+                                <td data-bind="text: followerCount"></td>
+                                <td data-bind="text: followingCount"></td>
                                 <td data-bind="text: tweetCount"></td>
                                 <td data-bind="text: ldate"></td>
                                 <td data-bind="text: adate" class="hidden-phone hidden-tablet"></td>
@@ -231,7 +231,7 @@ $access_token = $_SESSION['access_token'];
             <h2>Settings!</h2>
         </div>
     </div>
-    <div data-bind="text: ko.toJSON($root)"></div>
+    <!--div data-bind="text: ko.toJSON($root)"></div>-->
     <div id="loader">
     	<div id="icon"></div>
     </div>

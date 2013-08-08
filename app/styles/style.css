@@ -19,9 +19,9 @@ body {
 }
 
 #loader #icon {
-	left: 45%;
+	left: 47%;
 	top: 45%;
-	background: url("../images/image.jpg");
+	background: url("../images/loading-update.gif") no-repeat;
 	position: absolute;
 	width: 200px;
 	height: 200px;

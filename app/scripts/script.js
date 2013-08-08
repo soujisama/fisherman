@@ -1,11 +1,11 @@
 var dummyFisherman = {
-    name: "soujisama", followerCount: "*", followingCount: "*"
+    name: "soujisama", followerCount: "*", followingCount: "*", information: "lol wut?"
 };
 
 var dummyFollowQueue = [
-    { selected: false, handle: "one", followers: 23, following: 45, tweetCount: 45564, ldate: "12 March 1880", adate: "14 June 2013" },
-    { selected: true, handle: "two", followers: 23, following: 45, tweetCount: 45564, ldate: "12 March 1880", adate: "14 June 2013" },
-    { selected: false, handle: "three", followers: 23, following: 45, tweetCount: 45564, ldate: "12 March 1880", adate: "14 June 2013" }
+    { selected: false, handle: "loading", followerCount: "follow", followingCount: "queue", tweetCount: "...", ldate: "please", adate: "wait" }
+    //{ selected: true, handle: "two", followerCount: 23, followingCount: 45, tweetCount: 45564, ldate: "12 March 1880", adate: "14 June 2013" },
+    //{ selected: false, handle: "three", followerCount: 23, followingCount: 45, tweetCount: 45564, ldate: "12 March 1880", adate: "14 June 2013" }
 ];
 
 var dummySearchResult = {
@@ -40,15 +40,18 @@ function doneLoading() {
 //on load
 $(function () {
     flashStatus();
-
+	
+	$("#checkAllFollowers").on("click", function() {
+		$(".followerCheckbox").attr("checked","checked");
+	});
+	
     var FishingBoat = function(fisherman, followqueue, searchresult) {
     	var self = this;
         self.fisherman = ko.observable(fisherman);
         self.followers = ko.observableArray([]);
         self.following = ko.observableArray([]);
-        //this.followQueue = ko.observableArray([]);
         self.followQueue = ko.observableArray(followqueue);
-        self.inquiryQueue = ko.observableArray([]);
+        self.inquireQueue = ko.observableArray([]);
         self.searchResult = ko.observable(searchresult);
         self.status = ko.observable();
         self.searchString = ko.observable();
@@ -58,7 +61,7 @@ $(function () {
         });     
         self.tempList = ko.observableArray([]);
 
-        self.doSearch = function() {
+		self.doSearch = function() {
             self.doingSearch(true);
             nowLoading();
             $.ajax({
@@ -100,8 +103,8 @@ $(function () {
 					self.status(data.status);
 					doneLoading();
             	},
-            	error: function() {
-            		alert("sum win wong");
+            	error: function(data) {
+            		alert("do search says sum win wong <br/><br/>" + JSON.stringify(data));
             		doneLoading();
             	}
             });
@@ -132,20 +135,89 @@ $(function () {
         this.getFollowing = function() {
 
         };
+		
         this.getFollowQueue = function() {
             this.doingSearch(false);
+			$.ajax({
+				url: 'service.php',
+				data: { type: 'getQueueItems', cursor: 0, queue: 0  },
+				type: 'POST',
+				success: function(data) {
+					//alert(JSON.stringify(data));
+					self.followQueue(data.queue);
+				}
+			});
         };
+		
         this.getInquiryQueue = function() {
-
+            this.doingSearch(false);
+			$.ajax({
+				url: 'service.php',
+				data: { type: 'getQueueItems', cursor: 0, queue: 1  },
+				type: 'POST',
+				success: function(data) {
+					//alert(JSON.stringify(data));
+					self.followQueue(data.queue);
+				}
+			});
         };
+
         this.deleteFromQueue = function() {
 
         };
-        this.addToQueue = function() {
-
-        };
 		
-		self.getNext = function(junk, isFollowingList) {
+        self.addToQueue = function() {
+			nowLoading();
+			//alert(ko.toJS(self.tempList));
+			$.ajax({
+				url: 'service.php',
+				data: { type: 'addToQueue', list: ko.toJS(self.tempList) },
+				type: 'POST',
+				success: function(data) {
+					//alert('yes: ' + data);
+					self.tempList.removeAll();
+					self.getNext(0);
+					self.getNext(1);
+					doneLoading();
+				},
+				error: function(data) {
+					alert('no: ' + JSON.stringify(data));
+					doneLoading();
+				}
+			});
+		};
+		
+		self.checkAllBoxes = function(isFollowingList, junk) {
+			var checkAll = true;
+			if(isFollowingList) {
+				var list = ko.utils.arrayFilter(junk.followingList(),function(listItem) {
+					return listItem().selected;
+				});
+				if(list.length == junk.followingList().length)
+					checkAll = false;
+				ko.utils.arrayForEach(junk.followingList(), function(item) {
+					item().selected = checkAll;
+					self.tempList.remove(item().handle_id);
+					if(checkAll) self.tempList.push(item().handle_id);
+				});
+
+			}
+			else {
+				var list = ko.utils.arrayFilter(self.searchResult().followerList(),function(listItem) {
+					return listItem().selected;
+				});
+				if(list.length == self.searchResult().followerList().length)
+					checkAll = false;
+				ko.utils.arrayForEach(self.searchResult().followerList(), function(item) {
+					item().selected = checkAll;
+					self.tempList.remove(item().handle_id);
+					if(checkAll) self.tempList.push(item().handle_id);
+				});
+			}
+			self.searchResult.valueHasMutated();
+		};
+		
+		self.getNext = function(isFollowingList, junk) {
 			var cursor = 0;
 			if(isFollowingList) cursor = self.searchResult().followingIndex;
 			else index = self.searchResult().followerIndex;
@@ -157,30 +229,57 @@ $(function () {
 					self.status(data.status);
 					if(data.status.type != "error") {
 						if(isFollowingList) {
-							self.searchResult().following(data.list);
-							self.searchResult().followingIndex(data.cursor);
-							ko.utils.arrayForEach(self.searchResult().following,function(listItem) {
-								self.tempList.remove(listItem.handle_id);
-								if(listItem.selected) self.tempList.push(listItem.handle_id);
+							//self.searchResult.followingList.removeAll();
+							self.searchResult().followingList(data.list);
+							self.makeAllObservables(self.searchResult().followingList);
+							//ko.mapping.fromJSON(data.list,{},self.searchResult().followingList());
+							self.searchResult().followingIndex = data.cursor;
+							//self.makeAllObservables(self.searchResult);
+							ko.utils.arrayForEach(self.searchResult().followingList(),function(listItem) {
+								//self.searchResult().followingList().push(listItem);
+								//console.dir(listItem);
+								//alert(listItem().handle_id);
+								if(self.tempList.indexOf(listItem().handle_id) >= 0) {
+									//alert(listItem().selected);
+									listItem().selected = true;
+									//alert(listItem().selected);
+								}
+								///self.tempList.remove(listItem.handle_id);
+								else if(listItem().selected) self.tempList.push(listItem().handle_id);
 							});
 						}
 						else {
-							self.searchResult.followers(data.list);
-							self.searchResult.followerIndex(data.cursor);
-							ko.utils.arrayForEach(self.searchResult().followers,function(listItem) {
+							self.searchResult().followerList(data.list);
+							self.makeAllObservables(self.searchResult().followerList);
+							self.searchResult().followerIndex = data.cursor;
+							ko.utils.arrayForEach(self.searchResult().followerList(),function(listItem) {
+								if(self.tempList.indexOf(listItem().handle_id) >= 0) {
+									listItem().selected = true;
+								}
+								else if(listItem().selected) self.tempList.push(listItem().handle_id);
+							});
+						}
+						/*else {
+							self.searchResult().followerList(data.list);
+							self.searchResult().followerIndex = data.cursor;
+							ko.utils.arrayForEach(self.searchResult().followerList,function(listItem) {
 								self.tempList.remove(listItem.handle_id);
 								if(listItem.selected) self.tempList.push(listItem.handle_id);
 							});
-						}
+							self.makeAllObservables(self.searchResult().followerList);
+						}						
+						self.searchResult.valueHasMutated();*/
 					}
 					else {					
 						alert(data.status.type + ": " + data.status.message);
 					}
+					
+					self.searchResult.valueHasMutated();
 					self.status(data.status);
 					doneLoading();
             	},
-            	error: function() {
-            		alert("sum win wong");
+            	error: function(data) {
+            		alert("get next says sum win wong <br/><br/>"+JSON.stringify(data));
             		doneLoading();
             	}
             });
@@ -253,6 +352,7 @@ $(function () {
         this.init = function() {
             //populate fisherman
             //populate followqueue
+			
         };
     }
 
@@ -282,4 +382,30 @@ $(function () {
             titanic.status(data.status);
         }
     });
+	
+	$.ajax({
+		url: 'service.php',
+		data: { type: 'getQueueItems', cursor: 0, queue: 0  },
+		type: 'POST',
+		success: function(data) {
+			//alert(JSON.stringify(data));
+			//data = ko.toJSON(data);
+			//alert(data);
+			titanic.followQueue(data.queue);
+			//titanic.status(data.status);
+		}
+	});
+	
+	$.ajax({
+		url: 'service.php',
+		data: { type: 'getQueueItems', cursor: 0, queue: 1  },
+		type: 'POST',
+		success: function(data) {
+			//alert(JSON.stringify(data));
+			//data = ko.toJSON(data);
+			//alert(data);
+			titanic.inquireQueue(data.queue);
+			//titanic.status(data.status);
+		}
+	});
 });

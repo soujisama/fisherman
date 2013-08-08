@@ -26,6 +26,7 @@
     public $followingCount;
     public $tweetCount;
     public $ldate;
+	public $adate;
     public $selected = false;
     
     function __construct($id,$n,$frC,$fgC,$tC,$ld) {
@@ -85,8 +86,11 @@
 		$ids = array();
 		$cur = -1;
 		do {
-			$param = array('cursor' => $cur);
-			$ret = $this->tapi -> get($method.$handle, $param);
+			$param = array('user_id' => $handle, 'cursor' => $cur);
+			$ret = $this->tapi -> get($method, $param);
+			//echo ($method);
+			//var_dump($param);
+			//var_dump($ret);
 			$ids = array_merge($ids,$ret->ids);
 			$cur = $ret->next_cursor_str;
 		}
@@ -117,8 +121,8 @@
     }
     
     function fetch($table,$cursor) {
-    	$sql = $this->db -> prepare('select handle_id,handle,followers,following,tweets,ldate from '.$table.' where uid = ? limit ?, ?');
-    	$sql->bind_param('sss',$this->access_token['user_id'],$cursor,$this->count);
+    	$sql = $this->db -> prepare('select handle_id,handle,followers,following,tweets,ldate from '.$table.' where uid = ? and handle_id not in (select handle_id from fisherman_follow_queue where uid = ?) limit ?, ?');
+    	$sql->bind_param('ssss',$this->access_token['user_id'],$this->access_token['user_id'],$cursor,$this->count);
     	$sql->execute();
 		$sql->bind_result($handle_id,$handle,$followers,$following,$tweets,$ldate);
 
@@ -134,7 +138,10 @@
 				$userObject = new User($handle_id,$handle,$followers,$following,$tweets,$ldate);
 				array_push($list,$userObject);
 				while($sql->fetch()) {
+					if($tweets == 0) continue;
 					$userObject = new User($handle_id,$handle,$followers,$following,$tweets,$ldate);
+					$lag = 3 * 24 * 60 * 60;
+					if($userObject->tweetCount > 0 && $following/$followers > 0.7 && (strtotime($ldate) + $lag) > time()) $userObject->selected = true;
 					array_push($list,$userObject);
 				}
 				return $list;	
@@ -151,10 +158,12 @@
 		$list = array();
 		foreach($newIds as $user) {
 			//var_dump($user);
+			$days = 7;
+			$lag = $days * 24 * 60 * 60;
 			if($user->statuses_count == 0 || !isset($user->status)) continue;
 			$userObject = new User($user->id_str,$user->screen_name,$user->followers_count,$user->friends_count,
-									$user->statuses_count,$user->status->created_at,$user->id_str);
-			if($userObject->tweetCount > 0 && $userObject->followingCount/$userObject->followerCount > 0.7) $userObject->selected = true;
+									$user->statuses_count,$user->status->created_at);
+			if($userObject->tweetCount > 0 && $userObject->followingCount/$userObject->followerCount > 0.7 && (strtotime($userObject->ldate) + $lag) > time()) $userObject->selected = true;
 			array_push($list,$userObject);
 			$sql->bind_param("ssssss",$user->screen_name,$user->followers_count,$user->friends_count,
 									$user->statuses_count,$user->status->created_at,$user->id_str);
@@ -203,16 +212,27 @@
         //var_dump($this->tapi);
         $user = $this->tapi -> get('account/verify_credentials');
         //var_dump($user);
+		$sql = $this->db -> prepare("select tweeted_at,followed,unfollowed,count(*) from fisherman_users a join fisherman_follow_queue b where a.uid = b.uid and a.uid = ?");
+		//var_dump($sql);
+		$sql->bind_param('s',$user->id_str);
+		//var_dump($sql);
+		$sql->execute();
+		$sql->bind_result($t_at,$fd,$uf,$ct);
+		$string = "";
+		if($sql->fetch()) {
+			$string = "You have tweeted at $t_at people<br/>And been followed by $fd people<br/><br/><br/>$uf people didn't follow back<br/>They have been unfollowed<br/><br/>You have $ct people in your follow queue<br/>";
+		}
         $ret = (object) array(
         			"uid" => $user->id_str,
         			"name" => $user->screen_name,
         			"followerCount" => $user->followers_count,
         			"followingCount" => $user->friends_count,
+					"information" => $string,
         			"status" => (object) array('type' => 'success', 'message' => 'What are we fishing for today?')
         );
-	    
-	    $ignore_list = $this -> getIds('followers/ids/',$user->screen_name);
-	    $ignore_list = array_merge($ignore_list,$this -> getIds('friends/ids/',$user->screen_name));
+	    $sql->close();
+	    $ignore_list = $this -> getIds('followers/ids',$user->screen_name);
+	    $ignore_list = array_merge($ignore_list,$this -> getIds('friends/ids',$user->screen_name));
 	    $sql = $this->db -> prepare('insert into fisherman_ignore_lists (uid,ignore_id) values (?,?) on duplicate key update ignore_id = ignore_id');
 	    //var_dump($sql);
 	    foreach($ignore_list as $id) {
@@ -241,11 +261,11 @@
 			echo json_encode($ret);
 		}
 		else {		
-			$ids = $this -> getIds('followers/ids/', $user->id_str);
+			$ids = $this -> getIds('followers/ids', $user->id_str);
 			$this->saveIds($ids, 'fisherman_follower_lists');
 			//var_dump($ids);
 			
-			$ids = $this -> getIds('friends/ids/', $user->id_str);		
+			$ids = $this -> getIds('friends/ids', $user->id_str);		
 			$this->saveIds($ids, 'fisherman_following_lists');
 			//var_dump($ids);
 			
@@ -262,92 +282,71 @@
 	
 	function getNextList() {
 		$list = array();
-		if($this->data->list == 0) $list = $this -> fetch('fisherman_follower_lists',$this->data->cursor);
-		else $list = $this -> fetch('fisherman_following_lists',$this->data->cursor);
+		$tries = 0;
+		do {
+			if($this->data->list == 0) $list = $this -> fetch('fisherman_follower_lists',$this->data->cursor);
+			else $list = $this -> fetch('fisherman_following_lists',$this->data->cursor);
+			if(count($list) < 1) $this->data->cursor = 0;
+			$tries++;
+		}
+		while(count($list < 1) && $tries < 3);
 		$status = (object)array('type' => 'success', 'message' => 'list grabbed, dattebayo!');
 		$ret = (object) array('list' => $list, 'cursor' => $this->data->cursor + 100, 'status' => $status);
 		echo json_encode($ret);
 	}
 	
-	function uploadCM() {
-		$name = $_GET['name'];
-		$user = $_GET['user'];
-		$destination = $_GET['destination'];
-		$lat = $_GET['lat'];
-		$lng = $_GET['lng'];
-		$init = $_GET['init'];
-		$date = $_GET['date'];
+	function addToQueue() {
+		$list = $this->data->list;
+		$date = time();
+		//$list = explode(',',$this->data->list);
+		//echo $list;
+		//echo '<br /><br />';
+		//echo json_encode($list);
 		
 		//echo $name." ".$user." ".$destination." ".$lat." ".$lng." ".$date;
 		
-		$sql = $this->db->prepare("insert into comment_marker (name,user,destination,lat,lng,initial,date) values (?, ?, ?, ?, ?, ?, ?)");
-		$sql->bind_param("sssssis",$name,$user,$destination,$lat,$lng,$init,$date);
-		$sql->execute();
+		$sql = $this->db->prepare("call follow_enqueue(?, ?, ?)");
+		foreach($list as $id) {
+			$sql->bind_param("sss",$this->access_token['user_id'],$id,$date);
+			$sql->execute();
+		}
 		$this->db->commit();
 		$ret = $sql->insert_id;
-		
-		if($ret > 0) {
-			$sender = new SenderAPI();
-			$message = array("message"=>"New Comment Marker","type"=>0,"cm_id"=>$ret);
-			$sender->send($message);
-		}
-		//if insert_id > 0 : send gcm(NEW CM) to ALL // only create notification for those in the vicinity
-		
 		$sql->close();
-		sendResponse(200,$ret);
-		//echo $ret;
+		//sendResponse(200,$ret);
+		echo json_encode($ret);
 	}
-	
-	function uploadC() {
-		$cm = $_GET['cm'];
-		$user = $_GET['user'];
-		$text = $_GET['text'];
-		$condition = $_GET['condition'];
-		$date = $_GET['date'];
 		
-		//echo $name.$destination.$lat.$lng.$date;
+	function getQueueItems() {
+		$queue = $this->data->queue;
+		$cursor = $this->data->cursor;
+		//echo $queue.' '.$cursor;
+		$list = array();
 		
-		$sql = $this->db->prepare("insert into comment (comment_marker,user,comment_text,status,date) values (?, ?, ?, ?, ?)");
-		$sql->bind_param("issis",$cm,$user,$text,$condition,$date);
+		if($queue == 0) //follow
+		$sql = $this->db->prepare("select handle_id, handle, followers, following, tweets, ldate, adate from fisherman_follow_queue where uid = ? order by adate limit ?, 30");
+		else if($queue == 1) //inquire
+		$sql = $this->db->prepare("select handle_id, handle, followers, following, tweets, ldate, adate from fisherman_inquire_queue where uid = ? order by adate limit ?, 30");
+		$sql->bind_param("ss",$this->access_token['user_id'],$cursor);
+		
 		$sql->execute();
-		$this->db->commit();
-		$ret = $sql->insert_id;
+		$sql->bind_result($handle_id,$handle,$followers,$following,$tweets,$ldate,$adate);
 		
-		if($ret > 0) {
-			$sender = new SenderAPI();
-			$message = array("message"=>"New Comment","type"=>0,"cm_id"=>$cm);
-			$sender->send($message);
+		while($sql->fetch()) {   
+			$userObject = new User($handle_id,$handle,$followers,$following,$tweets,$ldate);
+			$since = time()-$adate;
+			if($since > 24 * 60 * 60) $since = substr($since/(24*60*60),0,4) ."d ago";
+			else if($since > 60 * 60) $since = substr($since/(60*60),0,4) ."h ago";
+			else if($since > 60) $since = substr($since/(60),0,4) ."m ago";
+			else $since = $since . "s ago";
+			$userObject->adate = $since;
+			array_push($list,$userObject);
 		}
-		
-		//if insert_id > 0 : send gcm(NEW COMMENT) to comment_marker.user -> get REGISTERED_ID;
+		$status = 'successfully loaded follower queue';
+		$ret = (object)array('queue' => $list, 'status' => $status);
+		echo json_encode($ret);
+				
 		$sql->close();
-		sendResponse(200,$ret);
-		//echo $ret;
-	}
-	
-	function uploadR() {
-		$comment = $_GET['comment'];
-		$user = $_GET['user'];
-		$vote = $_GET['vote'];
-		$date = $_GET['date'];
-		
-		
-		//echo $comment.$user.$vote.$date;
-		
-		$sql = $this->db->prepare("insert into rating (user,vote,comment,date) values (?,?,?,?) on duplicate key update vote = ?, date = ?");
-		$sql->bind_param("sissis",$user,$vote,$comment,$date,$vote,$date);
-		$sql->execute();
-		$this->db->commit();
-		$ret = $sql->insert_id;
-		
-		if(isset($_GET['changed'])) {
-			$sender = new SenderAPI();
-			$message = array("message"=>"Status Changed","type"=>0,"cm_id"=>$_GET['changed']);
-			$sender->send($message);
-		}
-		
-		$sql->close();
-		sendResponse(200);
 	}
 }
 
@@ -358,5 +357,6 @@ if($type == "registerUser") $api->registerUser();
 else if($type == "getOwnerInfo") $api->getOwnerInfo();
 else if($type == "getUserInfo") $api->getUserInfo();
 else if($type == "getNextList") $api->getNextList();
-else if($type == "getDestinations") $api->getDestinations();
+else if($type == "addToQueue") $api->addToQueue();
+else if($type == "getQueueItems") $api->getQueueItems();
 ?>
